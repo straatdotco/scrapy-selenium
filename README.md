@@ -1,11 +1,10 @@
 # Scrapy with selenium
-[![PyPI](https://img.shields.io/pypi/v/scrapy-selenium.svg)](https://pypi.python.org/pypi/scrapy-selenium) [![Build Status](https://travis-ci.org/clemfromspace/scrapy-selenium.svg?branch=master)](https://travis-ci.org/clemfromspace/scrapy-selenium) [![Test Coverage](https://api.codeclimate.com/v1/badges/5c737098dc38a835ff96/test_coverage)](https://codeclimate.com/github/clemfromspace/scrapy-selenium/test_coverage) [![Maintainability](https://api.codeclimate.com/v1/badges/5c737098dc38a835ff96/maintainability)](https://codeclimate.com/github/clemfromspace/scrapy-selenium/maintainability)
 
-Scrapy middleware to handle javascript pages using selenium.
+Custom port of Scrapy Selenium, a middleware to handle javascript pages using selenium.
 
 ## Installation
 ```
-$ pip install scrapy-selenium
+$ pip install git+[GITURL]
 ```
 You should use **python>=3.6**. 
 You will also need one of the Selenium [compatible browsers](http://www.seleniumhq.org/about/platforms.jsp).
@@ -97,3 +96,24 @@ yield SeleniumRequest(
     script='window.scrollTo(0, document.body.scrollHeight);',
 )
 ```
+
+#### `cb_intercept`
+
+a python function which intercepts and interacts with the selenium request acting on the selenium driver. 
+will return response to meta['intercept_data']
+also acting on the driver changes what is returned to the response object by scrapy selenium
+
+```python
+def interact_on_page(driver):
+  radio_all = driver.find_element(By.CSS_SELECTOR, '.some-class a')
+  ActionChains(driver).move_to_element(radio_all).click(radio_all).perform()
+  WebDriverWait(driver, timeout=30).until_not(lambda d: d.find_element(By.CLASS_NAME, '.loading'))
+  data = driver.execute_script('const data={}; ********; return data;')
+	return data
+yield SeleniumRequest(
+    url=url,
+    callback=self.parse_result,
+    interact=interact_on_page
+)
+def parse_result(self, response):
+    dynamic_data = response.request.meta['interact_data'] 

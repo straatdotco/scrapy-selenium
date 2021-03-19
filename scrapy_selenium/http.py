@@ -21,7 +21,10 @@ class SeleniumRequest(Request):
             will be returned in the response "meta" attribute.
         script: str
             JavaScript code to execute.
-
+        cb_intercept: method
+            a python function which intercepts and interacts with the selenium request acting on the selenium driver.
+            will return a an object to meta['intercept_data']
+            also acting on the driver changes what is returned to the response object by scrapy selenium
         """
 
         self.wait_time = wait_time

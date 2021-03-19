@@ -121,6 +121,10 @@ class SeleniumMiddleware:
         if request.script:
             self.driver.execute_script(request.script)
 
+        if request.cb_intercept:
+            intercept_func = request.cb_intercept
+            request.meta['intercept_data'] = intercept_func(self.driver)
+
         body = str.encode(self.driver.page_source)
 
         # Expose the driver via the "meta" attribute
