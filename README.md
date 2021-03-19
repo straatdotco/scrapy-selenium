@@ -113,7 +113,7 @@ def interact_on_page(driver):
 yield SeleniumRequest(
     url=url,
     callback=self.parse_result,
-    interact=interact_on_page
+    cb_intercept=interact_on_page
 )
 def parse_result(self, response):
     dynamic_data = response.request.meta['interact_data'] 
