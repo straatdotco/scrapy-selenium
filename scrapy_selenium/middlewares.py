@@ -48,22 +48,21 @@ class SeleniumMiddleware:
 
         driver_kwargs = {
             'executable_path': driver_executable_path,
-            f'{driver_name}_options': driver_options
+            'options': driver_options
         }
 
         # locally installed driver
         if driver_executable_path is not None:
             driver_kwargs = {
                 'executable_path': driver_executable_path,
-                f'{driver_name}_options': driver_options
+                'options': driver_options
             }
             self.driver = driver_klass(**driver_kwargs)
         # remote driver
         elif command_executor is not None:
             from selenium import webdriver
             capabilities = driver_options.to_capabilities()
-            self.driver = webdriver.Remote(command_executor=command_executor,
-                                           desired_capabilities=capabilities)
+            self.driver = webdriver.Remote(command_executor=command_executor, desired_capabilities=capabilities)
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -116,7 +115,7 @@ class SeleniumMiddleware:
             )
 
         if request.screenshot:
-            request.meta['screenshot'] = self.driver.get_screenshot_as_png()
+            request.meta['screenshot'] = self.driver.get_full_page_screenshot_as_png()
 
         if request.script:
             self.driver.execute_script(request.script)
