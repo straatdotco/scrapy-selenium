@@ -6,7 +6,7 @@ from scrapy import signals
 from scrapy.exceptions import NotConfigured
 from scrapy.http import HtmlResponse
 from selenium.webdriver.support.ui import WebDriverWait
-
+import undetected_chromedriver as uc
 from .http import SeleniumRequest
 
 
@@ -30,39 +30,45 @@ class SeleniumMiddleware:
         command_executor: str
             Selenium remote server endpoint
         """
+        if driver_name == 'uc':
+            # uses https://github.com/ultrafunkamsterdam/undetected-chromedriver to bypass blocking
+            options = uc.ChromeOptions()
+            for argument in driver_arguments:
+                options.add_argument(argument)
+            self.driver = uc.Chrome(options=options)
+        else:
+            webdriver_base_path = f'selenium.webdriver.{driver_name}'
 
-        webdriver_base_path = f'selenium.webdriver.{driver_name}'
+            driver_klass_module = import_module(f'{webdriver_base_path}.webdriver')
+            driver_klass = getattr(driver_klass_module, 'WebDriver')
 
-        driver_klass_module = import_module(f'{webdriver_base_path}.webdriver')
-        driver_klass = getattr(driver_klass_module, 'WebDriver')
+            driver_options_module = import_module(f'{webdriver_base_path}.options')
+            driver_options_klass = getattr(driver_options_module, 'Options')
 
-        driver_options_module = import_module(f'{webdriver_base_path}.options')
-        driver_options_klass = getattr(driver_options_module, 'Options')
+            driver_options = driver_options_klass()
 
-        driver_options = driver_options_klass()
+            if browser_executable_path:
+                driver_options.binary_location = browser_executable_path
+            for argument in driver_arguments:
+                driver_options.add_argument(argument)
 
-        if browser_executable_path:
-            driver_options.binary_location = browser_executable_path
-        for argument in driver_arguments:
-            driver_options.add_argument(argument)
-
-        driver_kwargs = {
-            'executable_path': driver_executable_path,
-            'options': driver_options
-        }
-
-        # locally installed driver
-        if driver_executable_path is not None:
             driver_kwargs = {
                 'executable_path': driver_executable_path,
                 'options': driver_options
             }
-            self.driver = driver_klass(**driver_kwargs)
-        # remote driver
-        elif command_executor is not None:
-            from selenium import webdriver
-            capabilities = driver_options.to_capabilities()
-            self.driver = webdriver.Remote(command_executor=command_executor, desired_capabilities=capabilities)
+
+            # locally installed driver
+            if driver_executable_path is not None:
+                driver_kwargs = {
+                    'executable_path': driver_executable_path,
+                    'options': driver_options
+                }
+                self.driver = driver_klass(**driver_kwargs)
+            # remote driver
+            elif command_executor is not None:
+                from selenium import webdriver
+                capabilities = driver_options.to_capabilities()
+                self.driver = webdriver.Remote(command_executor=command_executor, desired_capabilities=capabilities)
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -123,6 +129,9 @@ class SeleniumMiddleware:
         if request.cb_intercept:
             intercept_func = request.cb_intercept
             request.meta['intercept_data'] = intercept_func(self.driver)
+
+        # poll for requests or page source, compare to previous page source
+        # scroll to bottom of page (Only scroll to max height of X), poll again, scroll to top, poll again
 
         body = str.encode(self.driver.page_source)
 
