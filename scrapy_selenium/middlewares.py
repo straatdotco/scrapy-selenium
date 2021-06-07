@@ -136,10 +136,15 @@ class SeleniumMiddleware:
         body = str.encode(self.driver.page_source)
 
         # Expose the driver via the "meta" attribute
-        request.meta.update({'driver': self.driver})
+        # request.meta.update({'driver': self.driver})
+
+        current_url = self.driver.current_url
+
+        # close the driver to avoid memory leaks
+        self.driver.close()
 
         return HtmlResponse(
-            self.driver.current_url,
+            current_url,
             body=body,
             encoding='utf-8',
             request=request
