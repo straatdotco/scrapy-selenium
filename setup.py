@@ -24,9 +24,13 @@ def get_requirements(source):
 
     """
 
-    install_reqs = parse_requirements(filename=source, session=PipSession())
+    #install_reqs = parse_requirements(filename=source, session=PipSession())
 
-    return [str(ir.req) for ir in install_reqs]
+    #return [str(ir.req) for ir in install_reqs]
+    with open(source) as f:
+        requirements = f.read().splitlines()
+
+    return requirements
 
 
 setup(

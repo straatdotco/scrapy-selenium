@@ -14,7 +14,7 @@ class SeleniumMiddleware:
     """Scrapy middleware handling the requests using selenium"""
 
     def __init__(self, driver_name, driver_executable_path,
-        browser_executable_path, command_executor, driver_arguments):
+                    browser_executable_path, command_executor, driver_arguments):
         """Initialize the selenium webdriver
 
         Parameters
@@ -30,14 +30,25 @@ class SeleniumMiddleware:
         command_executor: str
             Selenium remote server endpoint
         """
-        if driver_name == 'uc':
+        self.driver_name = driver_name
+        self.driver_executable_path = driver_executable_path
+        self.driver_arguments = driver_arguments
+        self.browser_executable_path = browser_executable_path
+        self.command_executor =  command_executor
+        self.driver = None
+
+    def load_driver(self):
+        """
+        Initialize the selenium webdriver
+        """
+        if self.driver_name == 'uc':
             # uses https://github.com/ultrafunkamsterdam/undetected-chromedriver to bypass blocking
             options = uc.ChromeOptions()
-            for argument in driver_arguments:
+            for argument in self.driver_arguments:
                 options.add_argument(argument)
             self.driver = uc.Chrome(options=options)
         else:
-            webdriver_base_path = f'selenium.webdriver.{driver_name}'
+            webdriver_base_path = f'selenium.webdriver.{self.driver_name}'
 
             driver_klass_module = import_module(f'{webdriver_base_path}.webdriver')
             driver_klass = getattr(driver_klass_module, 'WebDriver')
@@ -47,33 +58,32 @@ class SeleniumMiddleware:
 
             driver_options = driver_options_klass()
 
-            if browser_executable_path:
-                driver_options.binary_location = browser_executable_path
-            for argument in driver_arguments:
+            if self.browser_executable_path:
+                driver_options.binary_location = self.browser_executable_path
+            for argument in self.driver_arguments:
                 driver_options.add_argument(argument)
 
             driver_kwargs = {
-                'executable_path': driver_executable_path,
+                'executable_path': self.driver_executable_path,
                 'options': driver_options
             }
 
             # locally installed driver
-            if driver_executable_path is not None:
+            if self.driver_executable_path is not None:
                 driver_kwargs = {
-                    'executable_path': driver_executable_path,
+                    'executable_path': self.driver_executable_path,
                     'options': driver_options
                 }
                 self.driver = driver_klass(**driver_kwargs)
             # remote driver
-            elif command_executor is not None:
+            elif self.command_executor is not None:
                 from selenium import webdriver
                 capabilities = driver_options.to_capabilities()
-                self.driver = webdriver.Remote(command_executor=command_executor, desired_capabilities=capabilities)
+                self.driver = webdriver.Remote(command_executor=self.command_executor, desired_capabilities=capabilities)
 
     @classmethod
     def from_crawler(cls, crawler):
         """Initialize the middleware with the crawler settings"""
-
         driver_name = crawler.settings.get('SELENIUM_DRIVER_NAME')
         driver_executable_path = crawler.settings.get('SELENIUM_DRIVER_EXECUTABLE_PATH')
         browser_executable_path = crawler.settings.get('SELENIUM_BROWSER_EXECUTABLE_PATH')
@@ -101,10 +111,11 @@ class SeleniumMiddleware:
 
     def process_request(self, request, spider):
         """Process a request using the selenium driver if applicable"""
-
         if not isinstance(request, SeleniumRequest):
             return None
 
+        # open the driver
+        self.load_driver()
         self.driver.get(request.url)
 
         for cookie_name, cookie_value in request.cookies.items():
@@ -133,13 +144,17 @@ class SeleniumMiddleware:
         # poll for requests or page source, compare to previous page source
         # scroll to bottom of page (Only scroll to max height of X), poll again, scroll to top, poll again
 
+        current_url = self.driver.current_url
+
         body = str.encode(self.driver.page_source)
 
-        # Expose the driver via the "meta" attribute
-        request.meta.update({'driver': self.driver})
+        request.meta.update({'used_selenium': True})
+
+        # close the driver
+        self.driver.quit()
 
         return HtmlResponse(
-            self.driver.current_url,
+            current_url,
             body=body,
             encoding='utf-8',
             request=request
