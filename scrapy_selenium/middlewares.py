@@ -7,6 +7,8 @@ from scrapy.http import HtmlResponse
 from selenium.webdriver.support.ui import WebDriverWait
 import seleniumwire.undetected_chromedriver.v2 as uc
 import logging
+from selenium.webdriver.remote.remote_connection import LOGGER as seleniumLogger
+from urllib3.connectionpool import log as urllibLogger
 from .http import SeleniumRequest
 from urllib.parse import urlparse
 
@@ -54,6 +56,10 @@ class SeleniumMiddleware:
         # raise the logging level for selenium-wire
         selenium_logger = logging.getLogger('seleniumwire')
         selenium_logger.setLevel(logging.ERROR)
+        hpack_logger = logging.getLogger('hpack')
+        hpack_logger.setLevel(logging.ERROR)
+        seleniumLogger.setLevel(logging.WARNING)
+        urllibLogger.setLevel(logging.WARNING)
         self.driver = uc.Chrome(options=options)
 
     @classmethod
@@ -65,12 +71,14 @@ class SeleniumMiddleware:
         command_executor = crawler.settings.get('SELENIUM_COMMAND_EXECUTOR')
         driver_arguments = crawler.settings.get('SELENIUM_DRIVER_ARGUMENTS')
 
+        '''
         if driver_name is None:
             raise NotConfigured('SELENIUM_DRIVER_NAME must be set')
 
         if driver_executable_path is None and command_executor is None:
             raise NotConfigured('Either SELENIUM_DRIVER_EXECUTABLE_PATH '
                                 'or SELENIUM_COMMAND_EXECUTOR must be set')
+        '''
 
         middleware = cls(
             driver_name=driver_name,
@@ -83,10 +91,6 @@ class SeleniumMiddleware:
         crawler.signals.connect(middleware.spider_closed, signals.spider_closed)
 
         return middleware
-
-    @staticmethod
-    def uc_listener(message):
-        breakpoint()
 
     def process_request(self, request, spider):
         """Process a request using the selenium driver if applicable"""

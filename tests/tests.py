@@ -12,8 +12,8 @@ class TestSpider(scrapy.Spider):
     allowed_domains = ['classic.com', 'www.classic.com']
     start_urls = ['https://classic.com']
     custom_settings = {
-        'SELENIUM_DRIVER_NAME': 'uc',
-        'SELENIUM_DRIVER_EXECUTABLE_PATH': which('geckodriver'),
+        #'SELENIUM_DRIVER_NAME': 'uc',
+        #'SELENIUM_DRIVER_EXECUTABLE_PATH': which('geckodriver'),
         'SELENIUM_DRIVER_ARGUMENTS': ['--headless'],
         'DOWNLOADER_MIDDLEWARES': {
             'scrapy_selenium.SeleniumMiddleware': 800
