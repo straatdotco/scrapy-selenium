@@ -1,13 +1,14 @@
 """This module contains the ``SeleniumMiddleware`` scrapy middleware"""
 
 from importlib import import_module
-
 from scrapy import signals
 from scrapy.exceptions import NotConfigured
 from scrapy.http import HtmlResponse
 from selenium.webdriver.support.ui import WebDriverWait
-import undetected_chromedriver as uc
+import seleniumwire.undetected_chromedriver.v2 as uc
+import logging
 from .http import SeleniumRequest
+from urllib.parse import urlparse
 
 
 class SeleniumMiddleware:
@@ -39,47 +40,21 @@ class SeleniumMiddleware:
 
     def load_driver(self):
         """
-        Initialize the selenium webdriver
+        Initialize the selenium UC webdriver via selenium wire
         """
-        if self.driver_name == 'uc':
-            # uses https://github.com/ultrafunkamsterdam/undetected-chromedriver to bypass blocking
-            options = uc.ChromeOptions()
+        # uses https://github.com/ultrafunkamsterdam/undetected-chromedriver to bypass blocking
+        options = uc.ChromeOptions()
+        try:
             for argument in self.driver_arguments:
                 options.add_argument(argument)
-            self.driver = uc.Chrome(options=options)
-        else:
-            webdriver_base_path = f'selenium.webdriver.{self.driver_name}'
-
-            driver_klass_module = import_module(f'{webdriver_base_path}.webdriver')
-            driver_klass = getattr(driver_klass_module, 'WebDriver')
-
-            driver_options_module = import_module(f'{webdriver_base_path}.options')
-            driver_options_klass = getattr(driver_options_module, 'Options')
-
-            driver_options = driver_options_klass()
-
-            if self.browser_executable_path:
-                driver_options.binary_location = self.browser_executable_path
-            for argument in self.driver_arguments:
-                driver_options.add_argument(argument)
-
-            driver_kwargs = {
-                'executable_path': self.driver_executable_path,
-                'options': driver_options
-            }
-
-            # locally installed driver
-            if self.driver_executable_path is not None:
-                driver_kwargs = {
-                    'executable_path': self.driver_executable_path,
-                    'options': driver_options
-                }
-                self.driver = driver_klass(**driver_kwargs)
-            # remote driver
-            elif self.command_executor is not None:
-                from selenium import webdriver
-                capabilities = driver_options.to_capabilities()
-                self.driver = webdriver.Remote(command_executor=self.command_executor, desired_capabilities=capabilities)
+        except:
+            pass
+        #options.add_argument('--enable_cdp_event=True')
+        #options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+        # raise the logging level for selenium-wire
+        selenium_logger = logging.getLogger('seleniumwire')
+        selenium_logger.setLevel(logging.ERROR)
+        self.driver = uc.Chrome(options=options)
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -109,13 +84,61 @@ class SeleniumMiddleware:
 
         return middleware
 
+    @staticmethod
+    def uc_listener(message):
+        breakpoint()
+
     def process_request(self, request, spider):
         """Process a request using the selenium driver if applicable"""
+
+        def compare_urls(url_1, url_2):
+            """
+            Compares 2 urls to see if they are the same based on scheme, hostname, path and query, ignoring port
+            Parameters
+            ----------
+            url_1 - string
+            url_2 - string
+
+            Returns
+            -------
+            bool - False if they don't match, True if they do
+            """
+            url_1 = urlparse(url_1)
+            url_2 = urlparse(url_2)
+            if url_2.scheme != url_1.scheme:
+                return False
+            if url_2.hostname != url_1.hostname:
+                return False
+            if url_2.path != url_1.path:
+                return False
+            if url_2.query != url_1.query:
+                return False
+            return True
+
+        def clean_url(url):
+            """
+            Cleans the url
+            eg: removes things like port which don't appear in response urls after redirect
+            Parameters
+            ----------
+            url - the url to clean
+
+            Returns
+            -------
+            cleaned_url - string - cleaned url
+            """
+            parsed_url = urlparse(url)
+            cleaned_url = f'{parsed_url.scheme}://{parsed_url.hostname}{parsed_url.path}'
+            if len(parsed_url.query) > 0:
+                cleaned_url += f'?{parsed_url.query}'
+            return cleaned_url
+
         if not isinstance(request, SeleniumRequest):
             return None
 
         # open the driver
         self.load_driver()
+
         self.driver.get(request.url)
 
         for cookie_name, cookie_value in request.cookies.items():
@@ -139,7 +162,7 @@ class SeleniumMiddleware:
 
         if request.cb_intercept:
             intercept_func = request.cb_intercept
-            request.meta['intercept_data'] = intercept_func(self.driver)
+            request.meta['intercept_data'] = intercept_func(driver)
 
         # poll for requests or page source, compare to previous page source
         # scroll to bottom of page (Only scroll to max height of X), poll again, scroll to top, poll again
@@ -149,6 +172,24 @@ class SeleniumMiddleware:
         body = str.encode(self.driver.page_source)
 
         request.meta.update({'used_selenium': True})
+
+        # build the redirect chain
+        redirect_chain = []
+        last_request_url = request.url
+        if current_url != last_request_url:
+            for sel_request in self.driver.requests:
+                redirect_url = sel_request.response.headers.get('location')  # considered dirty for comparison, may contain ports that aren't included in the response url
+                if sel_request.response.status_code in [300, 301, 302, 303, 304, 307] and not compare_urls(last_request_url, redirect_url):
+                    last_request_url = clean_url(sel_request.response.headers.get('location'))
+                    redirect_chain.append({
+                        'request_url': sel_request.url,
+                        'status_code': sel_request.response.status_code,
+                        'redirect_location': last_request_url,
+                        'request_headers': sel_request.headers,
+                        'response_headers': sel_request.response.headers
+                    })
+
+        request.meta.update({'redirects': redirect_chain})
 
         # close the driver
         self.driver.quit()
