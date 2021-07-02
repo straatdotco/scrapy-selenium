@@ -9,19 +9,19 @@ from scrapy.crawler import CrawlerProcess
 
 class TestSpider(scrapy.Spider):
     name = 'test_spider'
-    allowed_domains = ['classic.com', 'www.classic.com']
-    start_urls = ['https://classic.com']
+    allowed_domains = ['python.org']
+    start_urls = ['http://python.org']
     custom_settings = {
-        'SELENIUM_DRIVER_NAME': 'uc',
+        'SELENIUM_DRIVER_NAME': 'firefox',
         'SELENIUM_DRIVER_EXECUTABLE_PATH': which('geckodriver'),
-        'SELENIUM_DRIVER_ARGUMENTS': ['--headless'],
+        'SELENIUM_DRIVER_ARGUMENTS': ['-headless'],
         'DOWNLOADER_MIDDLEWARES': {
             'scrapy_selenium.SeleniumMiddleware': 800
         }
     }
 
     def start_requests(self):
-        yield SeleniumRequest(url='https://classic.com')
+        yield SeleniumRequest(url='http://www.python.org')
 
     def parse(self, response):
         breakpoint()
