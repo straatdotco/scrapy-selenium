@@ -5,7 +5,7 @@ from scrapy import signals
 from scrapy.exceptions import NotConfigured
 from scrapy.http import HtmlResponse
 from selenium.webdriver.support.ui import WebDriverWait
-import seleniumwire.undetected_chromedriver.v2 as uc
+from seleniumwire.undetected_chromedriver.v2 import Chrome, ChromeOptions
 import logging
 from selenium.webdriver.remote.remote_connection import LOGGER as seleniumLogger
 from urllib3.connectionpool import log as urllibLogger
@@ -45,7 +45,7 @@ class SeleniumMiddleware:
         Initialize the selenium UC webdriver via selenium wire
         """
         # uses https://github.com/ultrafunkamsterdam/undetected-chromedriver to bypass blocking
-        options = uc.ChromeOptions()
+        options = ChromeOptions()
         try:
             for argument in self.driver_arguments:
                 options.add_argument(argument)
@@ -60,7 +60,7 @@ class SeleniumMiddleware:
         hpack_logger.setLevel(logging.ERROR)
         seleniumLogger.setLevel(logging.WARNING)
         urllibLogger.setLevel(logging.WARNING)
-        self.driver = uc.Chrome(options=options)
+        self.driver = Chrome(options=options)
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -94,6 +94,26 @@ class SeleniumMiddleware:
 
     def process_request(self, request, spider):
         """Process a request using the selenium driver if applicable"""
+
+        def get_full_page_screenshot(driver):
+            """
+            Capture a full page screenshot in png
+            Parameters
+            ----------
+            driver: the webdriver instance string
+            Returns
+            -------
+            screenshot(str): the binary string of the screenshot png
+            """
+            original_size = driver.get_window_size()
+            scroll_width = driver.execute_script('return document.body.parentNode.scrollWidth')
+            scroll_height = driver.execute_script('return document.body.parentNode.scrollHeight')
+            required_width = scroll_width if scroll_width < 1920 else 1920
+            required_height = scroll_height if scroll_height < 20000 else 20000
+            driver.set_window_size(required_width, required_height)
+            screenshot = driver.find_element_by_tag_name('body').screenshot_as_png
+            driver.set_window_size(original_size['width'], original_size['height'])
+            return screenshot
 
         def compare_urls(url_1, url_2):
             """
@@ -159,7 +179,7 @@ class SeleniumMiddleware:
             )
 
         if request.screenshot:
-            request.meta['screenshot'] = self.driver.get_full_page_screenshot_as_png()
+            request.meta['screenshot'] = get_full_page_screenshot(self.driver)
 
         if request.script:
             self.driver.execute_script(request.script)

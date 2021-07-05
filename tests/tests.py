@@ -21,7 +21,7 @@ class TestSpider(scrapy.Spider):
     }
 
     def start_requests(self):
-        yield SeleniumRequest(url='https://classic.com')
+        yield SeleniumRequest(url='https://classic.com', screenshot=True)
 
     def parse(self, response):
         breakpoint()
