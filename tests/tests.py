@@ -17,11 +17,12 @@ class TestSpider(scrapy.Spider):
         'SELENIUM_DRIVER_ARGUMENTS': ['--headless'],
         'DOWNLOADER_MIDDLEWARES': {
             'scrapy_selenium.SeleniumMiddleware': 800
-        }
+        },
+        'HTTPERROR_ALLOW_ALL': True
     }
 
     def start_requests(self):
-        yield SeleniumRequest(url='https://classic.com', screenshot=True)
+        yield SeleniumRequest(url='https://www.automudo.com', screenshot=True)
 
     def parse(self, response):
         breakpoint()

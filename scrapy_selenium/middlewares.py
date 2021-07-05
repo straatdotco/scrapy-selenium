@@ -11,6 +11,9 @@ from selenium.webdriver.remote.remote_connection import LOGGER as seleniumLogger
 from urllib3.connectionpool import log as urllibLogger
 from .http import SeleniumRequest
 from urllib.parse import urlparse
+from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import WebDriverException
+
 
 
 class SeleniumMiddleware:
@@ -163,67 +166,94 @@ class SeleniumMiddleware:
         # open the driver
         self.load_driver()
 
-        self.driver.get(request.url)
+        self.driver.set_page_load_timeout(8)
+        try:
+            self.driver.get(request.url)
 
-        for cookie_name, cookie_value in request.cookies.items():
-            self.driver.add_cookie(
-                {
-                    'name': cookie_name,
-                    'value': cookie_value
-                }
+            for cookie_name, cookie_value in request.cookies.items():
+                self.driver.add_cookie(
+                    {
+                        'name': cookie_name,
+                        'value': cookie_value
+                    }
+                )
+
+            if request.wait_until:
+                WebDriverWait(self.driver, request.wait_time).until(
+                    request.wait_until
+                )
+
+            if request.screenshot:
+                request.meta['screenshot'] = get_full_page_screenshot(self.driver)
+
+            if request.script:
+                self.driver.execute_script(request.script)
+
+            if request.cb_intercept:
+                intercept_func = request.cb_intercept
+                request.meta['intercept_data'] = intercept_func(driver)
+
+            # poll for requests or page source, compare to previous page source
+            # scroll to bottom of page (Only scroll to max height of X), poll again, scroll to top, poll again
+
+            current_url = self.driver.current_url
+
+            body = str.encode(self.driver.page_source)
+
+            request.meta.update({'used_selenium': True})
+
+            # build the redirect chain
+            redirect_chain = []
+            last_request_url = request.url
+            finding_redirects = True
+            while finding_redirects:
+                if len(self.driver.requests) < 1:
+                    finding_redirects = False
+                    response_status_code=500
+                    response_headers=None
+                for sel_request in self.driver.requests:
+                    redirect_url = sel_request.response.headers.get('location')  # considered dirty for comparison, may contain ports that aren't included in the response url
+                    if sel_request.response.status_code in [300, 301, 302, 303, 304, 307] and not compare_urls(last_request_url, redirect_url):
+                        last_request_url = clean_url(sel_request.response.headers.get('location'))
+                        redirect_chain.append({
+                            'request_url': sel_request.url,
+                            'status_code': sel_request.response.status_code,
+                            'redirect_location': last_request_url,
+                            'request_headers': dict(sel_request.headers),
+                            'response_headers': dict(sel_request.response.headers)
+                        })
+                    if sel_request.url == current_url:
+                        response_headers = dict(sel_request.response.headers)
+                        response_status_code = sel_request.response.status_code
+                        finding_redirects = False
+                        break
+
+
+
+            request.meta.update({'redirects': redirect_chain})
+            
+            # close the driver
+            self.driver.quit()
+
+            # delete the encoding header because the body will not match gzip
+            try:
+                del response_headers['content-encoding']
+            except:
+                pass
+
+            return HtmlResponse(
+                current_url,
+                body=body,
+                status=response_status_code,
+                headers=response_headers,
+                encoding='utf-8',
+                request=request
             )
 
-        if request.wait_until:
-            WebDriverWait(self.driver, request.wait_time).until(
-                request.wait_until
-            )
+        except TimeoutException as e:
+            print(f'Error: Timeout Exception: {e}')
+            self.driver.quit()
 
-        if request.screenshot:
-            request.meta['screenshot'] = get_full_page_screenshot(self.driver)
-
-        if request.script:
-            self.driver.execute_script(request.script)
-
-        if request.cb_intercept:
-            intercept_func = request.cb_intercept
-            request.meta['intercept_data'] = intercept_func(driver)
-
-        # poll for requests or page source, compare to previous page source
-        # scroll to bottom of page (Only scroll to max height of X), poll again, scroll to top, poll again
-
-        current_url = self.driver.current_url
-
-        body = str.encode(self.driver.page_source)
-
-        request.meta.update({'used_selenium': True})
-
-        # build the redirect chain
-        redirect_chain = []
-        last_request_url = request.url
-        if current_url != last_request_url:
-            for sel_request in self.driver.requests:
-                redirect_url = sel_request.response.headers.get('location')  # considered dirty for comparison, may contain ports that aren't included in the response url
-                if sel_request.response.status_code in [300, 301, 302, 303, 304, 307] and not compare_urls(last_request_url, redirect_url):
-                    last_request_url = clean_url(sel_request.response.headers.get('location'))
-                    redirect_chain.append({
-                        'request_url': sel_request.url,
-                        'status_code': sel_request.response.status_code,
-                        'redirect_location': last_request_url,
-                        'request_headers': sel_request.headers,
-                        'response_headers': sel_request.response.headers
-                    })
-
-        request.meta.update({'redirects': redirect_chain})
-
-        # close the driver
-        self.driver.quit()
-
-        return HtmlResponse(
-            current_url,
-            body=body,
-            encoding='utf-8',
-            request=request
-        )
 
     def spider_closed(self):
         """Shutdown the driver when spider is closed"""
