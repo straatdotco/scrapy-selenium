@@ -13,7 +13,8 @@ from .http import SeleniumRequest
 from urllib.parse import urlparse
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import WebDriverException
-
+from scrapy.utils.request import request_fingerprint
+from scrapy.utils.reqser import request_to_dict, request_from_dict
 
 
 class SeleniumMiddleware:
@@ -191,7 +192,7 @@ class SeleniumMiddleware:
 
             if request.cb_intercept:
                 intercept_func = request.cb_intercept
-                request.meta['intercept_data'] = intercept_func(driver)
+                request.meta['intercept_data'] = intercept_func(self.driver)
 
             # poll for requests or page source, compare to previous page source
             # scroll to bottom of page (Only scroll to max height of X), poll again, scroll to top, poll again
@@ -203,6 +204,7 @@ class SeleniumMiddleware:
             request.meta.update({'used_selenium': True})
 
             # build the redirect chain
+            req_dict = request_to_dict(request)
             redirect_chain = []
             last_request_url = request.url
             finding_redirects = True
@@ -215,7 +217,11 @@ class SeleniumMiddleware:
                     redirect_url = sel_request.response.headers.get('location')  # considered dirty for comparison, may contain ports that aren't included in the response url
                     if sel_request.response.status_code in [300, 301, 302, 303, 304, 307] and not compare_urls(last_request_url, redirect_url):
                         last_request_url = clean_url(sel_request.response.headers.get('location'))
+                        req_dict['url'] = sel_request.url # we update the request url, so the cache key will be consistent
+                        req_dict['body'] = sel_request.body # same as above, but the body
+                        cache_key = request_fingerprint(request_from_dict(req_dict))
                         redirect_chain.append({
+                            'cache_key': cache_key,
                             'request_url': sel_request.url,
                             'status_code': sel_request.response.status_code,
                             'redirect_location': last_request_url,
@@ -223,16 +229,26 @@ class SeleniumMiddleware:
                             'response_headers': dict(sel_request.response.headers)
                         })
                     if sel_request.url == current_url:
+                        req_dict['url'] = current_url # we update the request url, so the cache key will be consistent
+                        req_dict['body'] = sel_request.body # same as above, but the body
                         response_headers = dict(sel_request.response.headers)
                         response_status_code = sel_request.response.status_code
+                        cache_key = request_fingerprint(request_from_dict(req_dict))
+                        redirect_chain.append({
+                            'cache_key': cache_key,
+                            'request_url': current_url,
+                            'status_code': response_status_code,
+                            'request_headers': dict(sel_request.headers),
+                            'response_headers': response_headers
+                        })
+
                         finding_redirects = False
                         break
 
 
 
             request.meta.update({'redirects': redirect_chain})
-            
-            # close the driver
+
             self.driver.quit()
 
             # delete the encoding header because the body will not match gzip
@@ -247,7 +263,7 @@ class SeleniumMiddleware:
                 status=response_status_code,
                 headers=response_headers,
                 encoding='utf-8',
-                request=request
+                request=request # this can't be modified in middleware, so we have to deal with it, by using the redirect chain, returned in meta
             )
 
         except TimeoutException as e:

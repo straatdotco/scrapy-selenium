@@ -22,7 +22,7 @@ class TestSpider(scrapy.Spider):
     }
 
     def start_requests(self):
-        yield SeleniumRequest(url='https://www.automudo.com', screenshot=True)
+        yield SeleniumRequest(url='https://classic.com', screenshot=True)
 
     def parse(self, response):
         breakpoint()
