@@ -226,7 +226,8 @@ class SeleniumMiddleware:
                             'status_code': sel_request.response.status_code,
                             'redirect_location': last_request_url,
                             'request_headers': dict(sel_request.headers),
-                            'response_headers': dict(sel_request.response.headers)
+                            'response_headers': dict(sel_request.response.headers),
+                            'response_body': sel_request.response.body.decode()
                         })
                     if sel_request.url == current_url:
                         req_dict['url'] = current_url # we update the request url, so the cache key will be consistent
@@ -239,7 +240,8 @@ class SeleniumMiddleware:
                             'request_url': current_url,
                             'status_code': response_status_code,
                             'request_headers': dict(sel_request.headers),
-                            'response_headers': response_headers
+                            'response_headers': response_headers,
+                            'response_body': body
                         })
 
                         finding_redirects = False
