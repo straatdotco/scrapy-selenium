@@ -9,7 +9,7 @@ from scrapy.crawler import CrawlerProcess
 
 class TestSpider(scrapy.Spider):
     name = 'test_spider'
-    allowed_domains = ['classic.com', 'www.classic.com']
+    allowed_domains = ['lcclassics.com', 'www.classic.com']
     start_urls = ['https://classic.com']
     custom_settings = {
         #'SELENIUM_DRIVER_NAME': 'uc',
@@ -18,11 +18,12 @@ class TestSpider(scrapy.Spider):
         'DOWNLOADER_MIDDLEWARES': {
             'scrapy_selenium.SeleniumMiddleware': 800
         },
-        'HTTPERROR_ALLOW_ALL': True
+        'HTTPERROR_ALLOW_ALL': True,
+        'COMPRESSION_ENABLED': False
     }
 
     def start_requests(self):
-        yield SeleniumRequest(url='https://classic.com', screenshot=True)
+        yield SeleniumRequest(url='https://lcclassics.com/active-inventory/', screenshot=True)
 
     def parse(self, response):
         breakpoint()

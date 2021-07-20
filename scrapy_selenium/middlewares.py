@@ -15,7 +15,7 @@ from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import WebDriverException
 from scrapy.utils.request import request_fingerprint
 from scrapy.utils.reqser import request_to_dict, request_from_dict
-
+from scrapy.exceptions import IgnoreRequest
 
 class SeleniumMiddleware:
     """Scrapy middleware handling the requests using selenium"""
@@ -167,7 +167,7 @@ class SeleniumMiddleware:
         # open the driver
         self.load_driver()
 
-        self.driver.set_page_load_timeout(8)
+        self.driver.set_page_load_timeout(10)
         try:
             self.driver.get(request.url)
 
@@ -178,6 +178,9 @@ class SeleniumMiddleware:
                         'value': cookie_value
                     }
                 )
+
+            if request.wait_time:
+                WebDriverWait(self.driver, request.wait_time)
 
             if request.wait_until:
                 WebDriverWait(self.driver, request.wait_time).until(
@@ -269,8 +272,11 @@ class SeleniumMiddleware:
             )
 
         except TimeoutException as e:
-            print(f'Error: Timeout Exception: {e}')
             self.driver.quit()
+            raise IgnoreRequest(f'IgnoringRequest - {request.url} hit selenium timeout exception: {e}')
+            # ToDo: how can this get returned to the spider to get processed... ie a site goes down, becomes buggy
+
+
 
 
     def spider_closed(self):
