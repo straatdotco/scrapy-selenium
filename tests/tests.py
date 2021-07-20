@@ -19,7 +19,7 @@ class TestSpider(scrapy.Spider):
             'scrapy_selenium.SeleniumMiddleware': 800
         },
         'HTTPERROR_ALLOW_ALL': True,
-        'COMPRESSION_ENABLED': False
+        # 'COMPRESSION_ENABLED': False
     }
 
     def start_requests(self):

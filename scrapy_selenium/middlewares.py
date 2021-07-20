@@ -261,6 +261,10 @@ class SeleniumMiddleware:
                 del response_headers['content-encoding']
             except:
                 pass
+            try:
+                del response_headers['Content-Encoding']
+            except:
+                pass
 
             return HtmlResponse(
                 current_url,
