@@ -275,6 +275,9 @@ class SeleniumMiddleware:
             self.driver.quit()
             raise IgnoreRequest(f'IgnoringRequest - {request.url} hit selenium timeout exception: {e}')
             # ToDo: how can this get returned to the spider to get processed... ie a site goes down, becomes buggy
+        except Exception as e:
+            self.driver.quit()
+            raise IgnoreRequest(f'IgnoringRequest - {request.url} because of scrapy-selenium error: {e}')
 
 
 
