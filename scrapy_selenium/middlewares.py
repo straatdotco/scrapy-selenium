@@ -4,6 +4,7 @@ from importlib import import_module
 from scrapy import signals
 from scrapy.exceptions import NotConfigured
 from scrapy.http import HtmlResponse
+from scrapy.http import Response
 from selenium.webdriver.support.ui import WebDriverWait
 from seleniumwire.undetected_chromedriver.v2 import Chrome, ChromeOptions
 import logging
@@ -17,11 +18,12 @@ from scrapy.utils.request import request_fingerprint
 from scrapy.utils.reqser import request_to_dict, request_from_dict
 from scrapy.exceptions import IgnoreRequest
 
+
 class SeleniumMiddleware:
     """Scrapy middleware handling the requests using selenium"""
 
     def __init__(self, driver_name, driver_executable_path,
-                    browser_executable_path, command_executor, driver_arguments):
+                    browser_executable_path, command_executor, driver_arguments, timeout):
         """Initialize the selenium webdriver
 
         Parameters
@@ -36,13 +38,18 @@ class SeleniumMiddleware:
             The path of the executable binary of the browser
         command_executor: str
             Selenium remote server endpoint
+        timeout: into
+            the number of seconds before the request times out and returns a 622 error code
         """
         self.driver_name = driver_name
         self.driver_executable_path = driver_executable_path
         self.driver_arguments = driver_arguments
         self.browser_executable_path = browser_executable_path
-        self.command_executor =  command_executor
+        self.command_executor = command_executor
+        self.timeout = timeout
         self.driver = None
+        self.logger = logging.getLogger(__name__)
+
 
     def load_driver(self):
         """
@@ -74,6 +81,7 @@ class SeleniumMiddleware:
         browser_executable_path = crawler.settings.get('SELENIUM_BROWSER_EXECUTABLE_PATH')
         command_executor = crawler.settings.get('SELENIUM_COMMAND_EXECUTOR')
         driver_arguments = crawler.settings.get('SELENIUM_DRIVER_ARGUMENTS')
+        timeout = crawler.settings.get('SELENIUM_TIMEOUT', 20)
 
         '''
         if driver_name is None:
@@ -89,7 +97,8 @@ class SeleniumMiddleware:
             driver_executable_path=driver_executable_path,
             browser_executable_path=browser_executable_path,
             command_executor=command_executor,
-            driver_arguments=driver_arguments
+            driver_arguments=driver_arguments,
+            timeout=timeout
         )
 
         crawler.signals.connect(middleware.spider_closed, signals.spider_closed)
@@ -167,7 +176,8 @@ class SeleniumMiddleware:
         # open the driver
         self.load_driver()
 
-        self.driver.set_page_load_timeout(10)
+        self.driver.set_page_load_timeout(self.timeout)
+        
         try:
             self.driver.get(request.url)
 
@@ -277,10 +287,11 @@ class SeleniumMiddleware:
 
         except TimeoutException as e:
             self.driver.quit()
-            raise IgnoreRequest(f'IgnoringRequest - {request.url} hit selenium timeout exception: {e}')
-            # ToDo: how can this get returned to the spider to get processed... ie a site goes down, becomes buggy
+            self.logger.error(f'{request.url} hit a selenium timeout exception: {e}')
+            return Response(request.url, status=622, request=request)  # return a 622 - this is the same as cloudflares timeout, but in our own 6xx code
         except Exception as e:
             self.driver.quit()
+            self.logger.error(f'IgnoringRequest - {request.url} hit a unknown error: {e}')
             raise IgnoreRequest(f'IgnoringRequest - {request.url} because of scrapy-selenium error: {e}')
 
 
