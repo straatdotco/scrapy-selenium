@@ -232,7 +232,7 @@ class SeleniumMiddleware:
                         last_request_url = clean_url(sel_request.response.headers.get('location'))
                         req_dict['url'] = sel_request.url # we update the request url, so the cache key will be consistent
                         req_dict['body'] = sel_request.body # same as above, but the body
-                        cache_key = request_fingerprint(request_from_dict(req_dict))
+                        cache_key = request_fingerprint(request_from_dict(req_dict, spider))
                         redirect_chain.append({
                             'cache_key': cache_key,
                             'request_url': sel_request.url,
@@ -247,7 +247,7 @@ class SeleniumMiddleware:
                         req_dict['body'] = sel_request.body # same as above, but the body
                         response_headers = dict(sel_request.response.headers)
                         response_status_code = sel_request.response.status_code
-                        cache_key = request_fingerprint(request_from_dict(req_dict))
+                        cache_key = request_fingerprint(request_from_dict(req_dict, spider))
                         redirect_chain.append({
                             'cache_key': cache_key,
                             'request_url': current_url,
