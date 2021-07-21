@@ -217,7 +217,7 @@ class SeleniumMiddleware:
             request.meta.update({'used_selenium': True})
 
             # build the redirect chain
-            req_dict = request_to_dict(request)
+            req_dict = request_to_dict(request, spider)
             redirect_chain = []
             last_request_url = request.url
             finding_redirects = True
