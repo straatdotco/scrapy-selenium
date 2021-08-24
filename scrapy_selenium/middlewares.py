@@ -35,7 +35,7 @@ class SeleniumMiddleware:
             options = uc.ChromeOptions()
             for argument in driver_arguments:
                 options.add_argument(argument)
-            self.driver = uc.Chrome(options=options)
+            self.driver = uc.Chrome(version_main=92, options=options)
         else:
             webdriver_base_path = f'selenium.webdriver.{driver_name}'
 
