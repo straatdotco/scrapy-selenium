@@ -117,3 +117,7 @@ yield SeleniumRequest(
 )
 def parse_result(self, response):
     dynamic_data = response.request.meta['interact_data'] 
+
+
+## Important Note
+undetected chrome can be finicky about the chromium version. using the default install of chromium-browser causes it to break. My recomendation is to install one of the archived versions from, http://archive.ubuntu.com/ubuntu/pool/universe/c/chromium-browser/, that meets your requirements
