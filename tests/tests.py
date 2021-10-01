@@ -9,8 +9,8 @@ from scrapy.crawler import CrawlerProcess
 
 class TestSpider(scrapy.Spider):
     name = 'test_spider'
-    allowed_domains = ['lcclassics.com', 'www.classic.com']
-    start_urls = ['https://classic.com']
+    allowed_domains = ['lbilimited.com', 'www.lbilimited.com']
+    #start_urls = ['https://classic.com']
     custom_settings = {
         #'SELENIUM_DRIVER_NAME': 'uc',
         #'SELENIUM_DRIVER_EXECUTABLE_PATH': which('geckodriver'),
@@ -23,7 +23,7 @@ class TestSpider(scrapy.Spider):
     }
 
     def start_requests(self):
-        yield SeleniumRequest(url='https://lcclassics.com/active-inventory/', screenshot=True)
+        yield SeleniumRequest(url='https://lbilimited.com/current-offerings/', screenshot=True, infinite_scroll=20000)
 
     def parse(self, response):
         breakpoint()

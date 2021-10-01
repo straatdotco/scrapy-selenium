@@ -17,6 +17,7 @@ from selenium.common.exceptions import WebDriverException
 from scrapy.utils.request import request_fingerprint
 from scrapy.utils.reqser import request_to_dict, request_from_dict
 from scrapy.exceptions import IgnoreRequest
+from time import sleep
 
 
 class SeleniumMiddleware:
@@ -197,9 +198,6 @@ class SeleniumMiddleware:
                     request.wait_until
                 )
 
-            if request.screenshot:
-                request.meta['screenshot'] = get_full_page_screenshot(self.driver)
-
             if request.script:
                 self.driver.execute_script(request.script)
 
@@ -209,6 +207,20 @@ class SeleniumMiddleware:
 
             # poll for requests or page source, compare to previous page source
             # scroll to bottom of page (Only scroll to max height of X), poll again, scroll to top, poll again
+            if request.infinite_scroll:
+                max_height = request.infinite_scroll if isinstance(request.infinite_scroll, int) else 20000
+                sleep_time = request.wait_time if isinstance(request.wait_time, int) else 5
+                last_height = self.driver.execute_script("return document.body.scrollHeight")
+                while True:
+                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    sleep(sleep_time)  # we wait for the scroll to load
+                    new_height = self.driver.execute_script("return document.body.scrollHeight")
+                    if new_height == last_height or new_height > max_height:
+                        break  # we're done the scrolling and break the loop
+                    last_height = new_height
+
+            if request.screenshot:
+                request.meta['screenshot'] = get_full_page_screenshot(self.driver)
 
             current_url = self.driver.current_url
 
