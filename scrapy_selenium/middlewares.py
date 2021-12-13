@@ -18,6 +18,9 @@ from scrapy.utils.request import request_fingerprint
 from scrapy.utils.reqser import request_to_dict, request_from_dict
 from scrapy.exceptions import IgnoreRequest
 from time import sleep
+import threading
+import queue
+import time
 
 
 class SeleniumMiddleware:
@@ -47,10 +50,9 @@ class SeleniumMiddleware:
         self.driver_arguments = driver_arguments
         self.browser_executable_path = browser_executable_path
         self.command_executor = command_executor
-        self.timeout = timeout
+        self.timeout = timeout  # time is actually a wait time, how long to wait for network request to be idle before proceeding
         self.driver = None
         self.logger = logging.getLogger(__name__)
-
 
     def load_driver(self):
         """
@@ -72,7 +74,7 @@ class SeleniumMiddleware:
         hpack_logger.setLevel(logging.ERROR)
         seleniumLogger.setLevel(logging.WARNING)
         urllibLogger.setLevel(logging.WARNING)
-        self.driver = Chrome(options=options)
+        self.driver = Chrome(enable_cdp_events=True, options=options)
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -108,6 +110,42 @@ class SeleniumMiddleware:
 
     def process_request(self, request, spider):
         """Process a request using the selenium driver if applicable"""
+
+        start_time = time.time()
+        idle_zero_time = start_time
+        network_idle = threading.Event()
+        idle_queue = queue.Queue()
+        wait_time = request.wait_time if isinstance(request.wait_time, int) else 5
+        max_wait_time = wait_time * 3  # The maximum amount of time to wait before proceeding
+
+        def cdp_network_listen(msg):
+            """
+            when ever a network request is done we restart the start time
+            """
+            idle_zero_time = time.time()
+
+        def watch_idle():
+            while True:
+                now_time = time.time()
+                idle_time = now_time - idle_zero_time
+                idle_queue.put(idle_time)
+                if idle_time > wait_time:
+                    break
+
+        def blocking_idle(idle_queue):
+            idle_time = 0
+            total_time = time.time() - start_time
+            while True:
+                try:
+                    idle_time = idle_queue.get(timeout=1)
+                    if idle_time > wait_time:
+                        network_idle.set()
+                        break
+                    elif total_time > max_wait_time:
+                        network_idle.set()
+                        break
+                except queue.Empty:
+                    pass
 
         def get_full_page_screenshot(driver):
             """
@@ -177,7 +215,15 @@ class SeleniumMiddleware:
         # open the driver
         self.load_driver()
 
-        self.driver.set_page_load_timeout(self.timeout)
+        # devtools = self.driver.getDevTools()
+        self.driver.add_cdp_listener('Page.loadEventFired', cdp_network_listen)
+        self.driver.add_cdp_listener('Network.dataReceived', cdp_network_listen)
+        self.driver.add_cdp_listener('Network.responseReceived', cdp_network_listen)
+        self.driver.add_cdp_listener('Network.webSocketFrameReceived', cdp_network_listen)
+        self.driver.add_cdp_listener('Network.webSocketFrameError', cdp_network_listen)
+
+        # breakpoint()
+        # self.driver.set_page_load_timeout(self.timeout)
         
         try:
             self.driver.get(request.url)
@@ -190,13 +236,21 @@ class SeleniumMiddleware:
                     }
                 )
 
-            if request.wait_time:
-                WebDriverWait(self.driver, request.wait_time)
+            #if request.wait_time:
+            #    WebDriverWait(self.driver, request.wait_time)
+                #ToDo: should be implicit wait?
+            #try:
+            threading.Thread(target=blocking_idle, args=(idle_queue,)).start()
+            threading.Thread(target=watch_idle).start()
+            #except:
+            #    breakpoint()
+            network_idle.wait() # wait here until the network is idle
 
-            if request.wait_until:
-                WebDriverWait(self.driver, request.wait_time).until(
-                    request.wait_until
-                )
+
+            #if request.wait_until:
+            #    WebDriverWait(self.driver, request.wait_time).until(
+            #        request.wait_until
+            #    )
 
             if request.script:
                 self.driver.execute_script(request.script)
@@ -212,8 +266,13 @@ class SeleniumMiddleware:
                 sleep_time = request.wait_time if isinstance(request.wait_time, int) else 5
                 last_height = self.driver.execute_script("return document.body.scrollHeight")
                 while True:
+                    network_idle.clear()
                     self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                    sleep(sleep_time)  # we wait for the scroll to load
+                    idle_zero_time = time.time()
+                    # sleep(sleep_time)  # we wait for the scroll to load
+                    threading.Thread(target=blocking_idle, args=(idle_queue,)).start()
+                    threading.Thread(target=watch_idle).start()
+                    network_idle.wait()
                     new_height = self.driver.execute_script("return document.body.scrollHeight")
                     if new_height == last_height or new_height > max_height:
                         break  # we're done the scrolling and break the loop

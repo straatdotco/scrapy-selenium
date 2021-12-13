@@ -23,7 +23,10 @@ class TestSpider(scrapy.Spider):
     }
 
     def start_requests(self):
+        #yield SeleniumRequest(url='https://github.com', screenshot=True, infinite_scroll=20000)
+        #yield SeleniumRequest(url='https://lbilimited.com/offerings/1930-rolls-royce-phantom-1/', screenshot=True, infinite_scroll=20000)
         yield SeleniumRequest(url='https://lbilimited.com/current-offerings/', screenshot=True, infinite_scroll=20000)
+
 
     def parse(self, response):
         breakpoint()
