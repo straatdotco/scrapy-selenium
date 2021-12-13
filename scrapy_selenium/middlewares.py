@@ -116,7 +116,7 @@ class SeleniumMiddleware:
         network_idle = threading.Event()
         idle_queue = queue.Queue()
         wait_time = request.wait_time if isinstance(request.wait_time, int) else 5
-        max_wait_time = wait_time * 3  # The maximum amount of time to wait before proceeding
+        max_wait_time = wait_time * 5  # The maximum amount of time to wait before proceeding
 
         def cdp_network_listen(msg):
             """
@@ -222,8 +222,7 @@ class SeleniumMiddleware:
         self.driver.add_cdp_listener('Network.webSocketFrameReceived', cdp_network_listen)
         self.driver.add_cdp_listener('Network.webSocketFrameError', cdp_network_listen)
 
-        # breakpoint()
-        # self.driver.set_page_load_timeout(self.timeout)
+        self.driver.set_page_load_timeout(60)  # 60 secs as max, but should stop before that
         
         try:
             self.driver.get(request.url)
@@ -236,21 +235,9 @@ class SeleniumMiddleware:
                     }
                 )
 
-            #if request.wait_time:
-            #    WebDriverWait(self.driver, request.wait_time)
-                #ToDo: should be implicit wait?
-            #try:
             threading.Thread(target=blocking_idle, args=(idle_queue,)).start()
             threading.Thread(target=watch_idle).start()
-            #except:
-            #    breakpoint()
             network_idle.wait() # wait here until the network is idle
-
-
-            #if request.wait_until:
-            #    WebDriverWait(self.driver, request.wait_time).until(
-            #        request.wait_until
-            #    )
 
             if request.script:
                 self.driver.execute_script(request.script)
@@ -330,8 +317,6 @@ class SeleniumMiddleware:
 
                         finding_redirects = False
                         break
-
-
 
             request.meta.update({'redirects': redirect_chain})
 

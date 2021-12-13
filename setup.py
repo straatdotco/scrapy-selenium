@@ -7,7 +7,7 @@ with open('requirements/requirements.txt') as f:
 
 setup(
     name='scrapy-selenium',
-    version = '3.2.0',
+    version = '3.2.1',
     author='Lawrence Stewart',
     author_email='lawrence@classic.com',
     url = 'https://github.com/straatdotco/scrapy-selenium',
