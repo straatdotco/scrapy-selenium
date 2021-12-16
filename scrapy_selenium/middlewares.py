@@ -249,14 +249,12 @@ class SeleniumMiddleware:
             # poll for requests or page source, compare to previous page source
             # scroll to bottom of page (Only scroll to max height of X), poll again, scroll to top, poll again
             if request.infinite_scroll:
-                max_height = request.infinite_scroll if isinstance(request.infinite_scroll, int) else 20000
-                sleep_time = request.wait_time if isinstance(request.wait_time, int) else 5
+                max_height = request.infinite_scroll if type(request.infinite_scroll) in (float, int) else 20000
                 last_height = self.driver.execute_script("return document.body.scrollHeight")
                 while True:
                     network_idle.clear()
                     self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                     idle_zero_time = time.time()
-                    # sleep(sleep_time)  # we wait for the scroll to load
                     threading.Thread(target=blocking_idle, args=(idle_queue,)).start()
                     threading.Thread(target=watch_idle).start()
                     network_idle.wait()
