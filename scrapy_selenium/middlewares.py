@@ -26,8 +26,7 @@ import time
 class SeleniumMiddleware:
     """Scrapy middleware handling the requests using selenium"""
 
-    def __init__(self, driver_name, driver_executable_path,
-                    browser_executable_path, command_executor, driver_arguments, timeout):
+    def __init__(self, driver_name, driver_executable_path, browser_executable_path, command_executor, driver_arguments, timeout, selenium_proxy):
         """Initialize the selenium webdriver
 
         Parameters
@@ -42,8 +41,10 @@ class SeleniumMiddleware:
             The path of the executable binary of the browser
         command_executor: str
             Selenium remote server endpoint
-        timeout: into
+        timeout: int
             the number of seconds before the request times out and returns a 622 error code
+        selenium_proxy: str
+            the string of the proxy like 127.0.0.1:3128 to be used when on the SeleniumRequest argument proxy=True
         """
         self.driver_name = driver_name
         self.driver_executable_path = driver_executable_path
@@ -51,10 +52,11 @@ class SeleniumMiddleware:
         self.browser_executable_path = browser_executable_path
         self.command_executor = command_executor
         self.timeout = timeout  # time is actually a wait time, how long to wait for network request to be idle before proceeding
+        self.selenium_proxy = selenium_proxy
         self.driver = None
         self.logger = logging.getLogger(__name__)
 
-    def load_driver(self):
+    def load_driver(self, proxy=False):
         """
         Initialize the selenium UC webdriver via selenium wire
         """
@@ -65,7 +67,20 @@ class SeleniumMiddleware:
                 options.add_argument(argument)
         except:
             pass
+
+        if proxy and self.selenium_proxy:
+            sw_options = {
+                'proxy': {
+                    'http': f'http://{self.selenium_proxy}',
+                    'https': f'https://{self.selenium_proxy}',
+                    'no_proxy': 'localhost,127.0.0.1'
+                }
+            }
+        else:
+            sw_options = {}
+
         #options.add_argument('--enable_cdp_event=True')
+        # options.add_argument('--proxy-server=True')
         #options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
         # raise the logging level for selenium-wire
         selenium_logger = logging.getLogger('seleniumwire')
@@ -74,7 +89,7 @@ class SeleniumMiddleware:
         hpack_logger.setLevel(logging.ERROR)
         seleniumLogger.setLevel(logging.WARNING)
         urllibLogger.setLevel(logging.WARNING)
-        self.driver = Chrome(enable_cdp_events=True, options=options)
+        self.driver = Chrome(enable_cdp_events=True, options=options, seleniumwire_options=sw_options)
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -85,6 +100,7 @@ class SeleniumMiddleware:
         command_executor = crawler.settings.get('SELENIUM_COMMAND_EXECUTOR')
         driver_arguments = crawler.settings.get('SELENIUM_DRIVER_ARGUMENTS')
         timeout = crawler.settings.get('SELENIUM_TIMEOUT', 20)
+        selenium_proxy = crawler.settings.get('SELENIUM_PROXY', None)
 
         '''
         if driver_name is None:
@@ -101,7 +117,8 @@ class SeleniumMiddleware:
             browser_executable_path=browser_executable_path,
             command_executor=command_executor,
             driver_arguments=driver_arguments,
-            timeout=timeout
+            timeout=timeout,
+            selenium_proxy=selenium_proxy
         )
 
         crawler.signals.connect(middleware.spider_closed, signals.spider_closed)
@@ -213,7 +230,7 @@ class SeleniumMiddleware:
             return None
 
         # open the driver
-        self.load_driver()
+        self.load_driver(proxy=request.proxy)
 
         # devtools = self.driver.getDevTools()
         self.driver.add_cdp_listener('Page.loadEventFired', cdp_network_listen)
