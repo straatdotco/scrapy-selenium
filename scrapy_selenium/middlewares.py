@@ -357,6 +357,8 @@ class SeleniumMiddleware:
             )
 
         except TimeoutException as e:
+            if request.screenshot:
+                request.meta['screenshot'] = get_full_page_screenshot(self.driver)
             self.driver.quit()
             self.logger.error(f'{request.url} hit a selenium timeout exception: {e}')
             return Response(request.url, status=622, request=request)  # return a 622 - this is the same as cloudflares timeout, but in our own 6xx code
