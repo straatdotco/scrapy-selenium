@@ -6,7 +6,7 @@ from scrapy import Request
 class SeleniumRequest(Request):
     """Scrapy ``Request`` subclass providing additional arguments"""
 
-    def __init__(self, wait_time=None, wait_until=None, screenshot=False, script=None, cb_intercept=None, infinite_scroll=False, proxy=False, *args, **kwargs):
+    def __init__(self, wait_time=None, wait_until=None, screenshot=False, script=None, cb_intercept=None, infinite_scroll=False, proxy=False, timeout=None, *args, **kwargs):
         """Initialize a new selenium request
 
         Parameters
@@ -29,6 +29,8 @@ class SeleniumRequest(Request):
             Pass either an int or Bool, if it evaluates to true it'll infinite scroll to a max of 20000px, else int sets the max.
         proxy: bool
             if true, requests are proxied. Defaults to False
+        timeout: int
+            overrides the default timeout if it needs to be configured on a per domain/per request basis
         """
 
         self.wait_time = wait_time
@@ -38,5 +40,6 @@ class SeleniumRequest(Request):
         self.cb_intercept = cb_intercept
         self.infinite_scroll = infinite_scroll
         self.proxy = proxy
+        self.timeout = timeout
 
         super().__init__(*args, **kwargs)
